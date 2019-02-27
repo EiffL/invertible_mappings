@@ -132,10 +132,11 @@ class SpecDenseLayer(tf.keras.layers.Layer):
 #         print(self.name)
     
     def build(self, input_shape):
-        self.kernel = self.add_variable("kernel", 
+        with tf.variable_scope('/kernelspecnorm') as scope:
+            self.kernel = self.add_variable("kernel", 
                                     shape=[int(input_shape[-1]), 
                                            self.num_outputs])
-        self.bias = self.add_variable("bias", 
+            self.bias = self.add_variable("bias", 
                                     shape=[self.num_outputs])
     
 #     def call(self, input):
@@ -148,7 +149,7 @@ class SpecDenseLayer(tf.keras.layers.Layer):
         with tf.variable_scope(self.name+'/kernelspecnorm') as scope:
             if tfops.scope_has_variables(scope):
                 scope.reuse_variables()
-            x = tf.matmul(input, tfops.spectral_normed_weight(self.kernel))
+            x = tf.matmul(input, tfops.spectral_normed_weight(self.kernel, num_iters=3))
             x += self.bias
             x = self.activation(x)
             return x
