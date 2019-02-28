@@ -124,11 +124,12 @@ def wide_resnet_snorm(inputs, depth,
 class SpecDenseLayer(tf.keras.layers.Layer):
     '''Return a dense layer with spectral normed weights
     '''
-    def __init__(self, num_outputs, activation=None):
+    def __init__(self, num_outputs, activation=None, num_iters=1):
         super(SpecDenseLayer, self).__init__()
         self.num_outputs = num_outputs
         if activation is None: activation = tf.identity
         self.activation = activation
+        self.num_iters = num_iters
 #         print(self.name)
     
     def build(self, input_shape):
@@ -149,7 +150,7 @@ class SpecDenseLayer(tf.keras.layers.Layer):
         with tf.variable_scope(self.name+'/kernelspecnorm') as scope:
             if tfops.scope_has_variables(scope):
                 scope.reuse_variables()
-            x = tf.matmul(input, tfops.spectral_normed_weight(self.kernel, num_iters=3))
+            x = tf.matmul(input, tfops.spectral_normed_weight(self.kernel, num_iters=self.num_iters))
             x += self.bias
             x = self.activation(x)
             return x
