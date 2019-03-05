@@ -92,6 +92,40 @@ def specnormconv3d(input_, output_dim,
             return conv
 
 
+@add_arg_scope
+def specnormconv1d(input_, output_dim,
+           kernel_size=3, stride=1, stddev=None,
+           name="conv1d", spectral_normed=True, update_collection=None, with_w=False, 
+             padding="SAME", reuse=tf.AUTO_REUSE):
+
+    k_h = kernel_size
+    d_h = stride
+    # Glorot intialization
+    # For RELU nonlinearity, it's sqrt(2./(n_in)) instead
+    fan_in = k_h * input_.get_shape().as_list()[-1]
+    fan_out = k_h * output_dim
+    if stddev is None:
+        stddev = tf.sqrt(2. / (fan_in))
+
+    with tf.variable_scope(name) as scope:
+        if scope_has_variables(scope):
+            scope.reuse_variables()
+        w = tf.get_variable("w", [k_h, input_.get_shape()[-1], output_dim],
+                            initializer=tf.truncated_normal_initializer(stddev=stddev))
+        if spectral_normed:
+            conv = tf.nn.conv1d(input_, spectral_normed_weight(w, update_collection=update_collection),
+                              stride=d_h, padding=padding)
+        else:
+            conv = tf.nn.conv1d(input_, w, stride=d_h, padding=padding)
+
+        biases = tf.get_variable("b", [output_dim], initializer=tf.constant_initializer(0.0))
+        conv = tf.nn.bias_add(conv, biases)
+        if with_w:
+            return conv, w, biases
+        else:
+            return conv
+
+
 
 ###Following have been taken from https://github.com/openai/glow/blob/master/tfops.py
 ###and modified to 3D. In addition, some variable names have been modified
