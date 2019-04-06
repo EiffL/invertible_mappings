@@ -62,7 +62,7 @@ def scope_has_variables(scope):
 def specnormconv3d(input_, output_dim,
            kernel_size=3, stride=1, stddev=None,
            name="conv3d", spectral_normed=True, update_collection=None, with_w=False, 
-             padding="SAME", reuse=tf.AUTO_REUSE):
+                   padding="SAME", reuse=tf.AUTO_REUSE, num_iters=1):
 
     k_h, k_w, k_z = [kernel_size]*3
     d_h, d_w, d_z = [stride]*3 
@@ -79,7 +79,7 @@ def specnormconv3d(input_, output_dim,
         w = tf.get_variable("w", [k_h, k_w, k_z, input_.get_shape()[-1], output_dim],
                             initializer=tf.truncated_normal_initializer(stddev=stddev))
         if spectral_normed:
-            conv = tf.nn.conv3d(input_, spectral_normed_weight(w, update_collection=update_collection),
+            conv = tf.nn.conv3d(input_, spectral_normed_weight(w, update_collection=update_collection, num_iters=num_iters),
                               strides=[1, d_h, d_w, d_z, 1], padding=padding)
         else:
             conv = tf.nn.conv3d(input_, w, strides=[1, d_h, d_w, d_z, 1], padding=padding)
@@ -92,11 +92,47 @@ def specnormconv3d(input_, output_dim,
             return conv
 
 
+
+@add_arg_scope
+def specnormconv2d(input_, output_dim,
+           kernel_size=3, stride=1, stddev=None,
+           name="conv2d", spectral_normed=True, update_collection=None, with_w=False, 
+                   padding="SAME", reuse=tf.AUTO_REUSE, num_iters=1):
+
+    k_h, k_w = [kernel_size]*2
+    d_h, d_w = [stride]*2
+    # Glorot intialization
+    # For RELU nonlinearity, it's sqrt(2./(n_in)) instead
+    fan_in = k_h * k_w * input_.get_shape().as_list()[-1]
+    fan_out = k_h * k_w * output_dim
+    if stddev is None:
+        stddev = tf.sqrt(2. / (fan_in))
+
+    with tf.variable_scope(name) as scope:
+        if scope_has_variables(scope):
+            scope.reuse_variables()
+        w = tf.get_variable("w", [k_h, k_w, input_.get_shape()[-1], output_dim],
+                            initializer=tf.truncated_normal_initializer(stddev=stddev))
+        if spectral_normed:
+            conv = tf.nn.conv2d(input_, spectral_normed_weight(w, update_collection=update_collection,
+                                                               num_iters=num_iters),
+                              strides=[1, d_h, d_w, 1], padding=padding)
+        else:
+            conv = tf.nn.conv2d(input_, w, strides=[1, d_h, d_w, 1], padding=padding)
+
+        biases = tf.get_variable("b", [output_dim], initializer=tf.constant_initializer(0.0))
+        conv = tf.nn.bias_add(conv, biases)
+        if with_w:
+            return conv, w, biases
+        else:
+            return conv
+
+    
 @add_arg_scope
 def specnormconv1d(input_, output_dim,
            kernel_size=3, stride=1, stddev=None,
            name="conv1d", spectral_normed=True, update_collection=None, with_w=False, 
-             padding="SAME", reuse=tf.AUTO_REUSE):
+                   padding="SAME", reuse=tf.AUTO_REUSE, num_iters=1):
 
     k_h = kernel_size
     d_h = stride
@@ -112,8 +148,11 @@ def specnormconv1d(input_, output_dim,
             scope.reuse_variables()
         w = tf.get_variable("w", [k_h, input_.get_shape()[-1], output_dim],
                             initializer=tf.truncated_normal_initializer(stddev=stddev))
+        #w = tf.get_variable("w", [k_h, input_.get_shape()[-1], output_dim],
+        #                    initializer=tf.glorot_uniform_initializer())
         if spectral_normed:
-            conv = tf.nn.conv1d(input_, spectral_normed_weight(w, update_collection=update_collection),
+            conv = tf.nn.conv1d(input_, spectral_normed_weight(w, update_collection=update_collection,
+                                                               num_iters=num_iters),
                               stride=d_h, padding=padding)
         else:
             conv = tf.nn.conv1d(input_, w, stride=d_h, padding=padding)
