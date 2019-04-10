@@ -434,9 +434,12 @@ class Squeeze3d(tfb.Reshape):
         return x
 
 
-
-
-
+def f_net(name, h, width, n_out=None):
+    n_out = n_out or int(h.get_shape()[4])
+    with tf.variable_scope(name, reuse=tf.AUTO_REUSE):
+        h = tf.layers.conv3d(h, width, 3, padding='SAME', activation=tf.nn.relu)
+        h = tf.layers.conv3d(h, n_out, 3, padding='SAME', activation=None)
+    return h
 
 def f_net3d(name, h, width, n_out=None):
 

@@ -2,7 +2,7 @@ import tensorflow_probability as tfp
 import tensorflow as tf
 tfb = tfp.bijectors
 
-from .tfops import invertible_1x1_conv, f_net3d, actnorm3d, int_shape
+from .tfops import invertible_1x1_conv, f_net3d, actnorm3d, int_shape, f_net
 
 class Conv1x1_3D(tfb.Bijector):
     """ Implementation of a 1x1 convolution
@@ -140,8 +140,7 @@ class Squeeze3d(tfb.Reshape):
 
 
 class AffineGlow3d(tfb.Bijector):
-    def __init__(self, width=16,
-               name="affine"):
+    def __init__(self, width=16, name="affine"):
 
         self.width = width
         super(AffineGlow3d, self).__init__(
@@ -160,18 +159,16 @@ class AffineGlow3d(tfb.Bijector):
         x1 = x[:, :, :, :, :n_x // 2]
         x2 = x[:, :, :, :, n_x // 2:]
 
-        h = f_net3d(self._name + "/f1", x1, width=self.width, n_out=n_x)
+        h = f_net(self._name + "/f1", x1, width=self.width, n_out=n_x)
         shift = h[:, :, :, :, 0::2]
         # scale = tf.exp(h[:, :, :, 1::2])
-        scale = tf.nn.sigmoid(h[:, :, :, :, 1::2] + 2.)
+        scale = tf.nn.softplus(h[:, :, :, :, 1::2]) + 0.1
         x2 += shift
         x2 *= scale
 
-        z = tf.concat([x1, x2], 4)
+        z = tf.concat([x1, x2], -1)
 
         return z
-
-
 
     def _inverse(self, x):
         n_x = int(x.get_shape()[4])
@@ -180,17 +177,16 @@ class AffineGlow3d(tfb.Bijector):
         x1 = x[:, :, :, :, :n_x // 2]
         x2 = x[:, :, :, :, n_x // 2:]
 
-        h = f_net3d(self._name + "/f1", x1, width=self.width, n_out=n_x)
+        h = f_net(self._name + "/f1", x1, width=self.width, n_out=n_x)
         shift = h[:, :, :, :, 0::2]
 
         # scale = tf.exp(h[:, :, :, 1::2])
-        scale = tf.nn.sigmoid(h[:, :, :, :, 1::2] + 2.)
+        # scale = tf.nn.sigmoid(h[:, :, :, :, 1::2] + 2.)
+        scale = tf.nn.softplus(h[:, :, :, :, 1::2]) + 0.1
         x2 /= scale
         x2 -= shift
 
         z = tf.concat([x1, x2], 4)
-
-
         return z
 
 
@@ -202,9 +198,10 @@ class AffineGlow3d(tfb.Bijector):
         x1 = x[:, :, :, :, :n_x // 2]
         x2 = x[:, :, :, :, n_x // 2:]
 
-        h = f_net3d(self._name + "/f1", x1, width=self.width, n_out=n_x)
+        h = f_net(self._name + "/f1", x1, width=self.width, n_out=n_x)
         shift = h[:, :, :, :, 0::2]
         # scale = tf.exp(h[:, :, :, 1::2])
-        scale = tf.nn.sigmoid(h[:, :, :, :, 1::2] + 2.)
+        scale = tf.nn.softplus(h[:, :, :, :, 1::2]) + 0.1
+        # scale = tf.nn.sigmoid(h[:, :, :, :, 1::2] + 2.)
         logdet = tf.reduce_sum(tf.log(scale), axis=[1, 2, 3, 4])
         return logdet
