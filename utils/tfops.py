@@ -279,6 +279,7 @@ def invertible_1x1_conv(name, z, reverse=False):
 
                 return z, logdet
 
+
 @add_arg_scope
 def get_variable_ddi(name, shape, initial_value, dtype=tf.float32, init=False, trainable=True):
     w = tf.get_variable(name, shape, dtype, None, trainable=trainable)
@@ -361,3 +362,101 @@ def actnorm_scale3d(name, x, scale=1., logscale_factor=3.,
         if reverse:
             dlogdet *= -1
         return x, dlogdet
+
+
+#Squeeze operation for invertible downsampling in 3D
+#
+#
+class Squeeze3d(tfb.Reshape):
+    """
+    Borrowed from https://github.com/openai/glow/blob/master/tfops.py
+    """
+    def __init__(self,
+                 event_shape_in,
+                 factor=2,
+                 is_constant_jacobian=True,
+                 validate_args=False,
+                 name=None):
+
+        assert factor >= 1
+        name = name or "squeeze"
+        self.factor = factor
+        event_shape_out = 1*event_shape_in
+        event_shape_out[0] //=2
+        event_shape_out[1] //=2
+        event_shape_out[2] //=2
+        event_shape_out[3] *=8
+        self.event_shape_out = event_shape_out
+
+        super(Squeeze3d, self).__init__(
+            event_shape_out=event_shape_out,
+            event_shape_in=event_shape_in,
+        validate_args=validate_args,
+        name=name)
+
+    def _forward(self, x):
+        if self.factor == 1:
+            return x
+        factor = self.factor
+
+        shape = tf.shape(x)
+        height = shape[1]
+        width = shape[2]
+        length = shape[3]
+        n_channels = x.get_shape()[4]
+
+#         print(height, width, length, n_channels )
+#         assert height % factor == 0 and width % factor == 0 and length % factor == 0
+        x = tf.reshape(x, [-1, height//factor, factor,
+                           width//factor, factor, length//factor, factor, n_channels])
+        x = tf.transpose(x, [0, 1, 3, 5, 7, 2, 4, 6])
+        x = tf.reshape(x, [-1, height//factor, width//factor,
+                               length//factor, n_channels*factor**3])
+        return x
+
+    def _inverse(self, x):
+        if self.factor == 1:
+            return x
+        factor = self.factor
+
+        shape = tf.shape(x)
+        height = shape[1]
+        width = shape[2]
+        length = shape[3]
+        n_channels = int(x.get_shape()[4])
+
+#         print(height, width, length, n_channels )
+        assert n_channels >= 8 and n_channels % 8 == 0
+        x = tf.reshape(
+            x, [-1, height, width, length, int(n_channels/factor**3), factor, factor, factor])
+        x = tf.transpose(x, [0, 1, 5, 2, 6, 3, 7, 4])
+        x = tf.reshape(x, (-1, height*factor,
+                           width*factor, height*factor, int(n_channels/factor**3)))
+        return x
+
+
+
+
+
+
+def f_net3d(name, h, width, n_out=None):
+
+    k_h, k_w, k_z = [3]*3
+    fan_in = k_h * k_w * k_z * h.get_shape().as_list()[-1]
+    stddev = tf.sqrt(2. / (fan_in))
+    n_out = n_out or int(h.get_shape()[4])
+
+    with tf.variable_scope(name, reuse=tf.AUTO_REUSE):
+#         if scope_has_variables(scope):
+#             scope.reuse_variables()
+        w1 = tf.get_variable("w1", [3, 3, 3, h.get_shape()[-1], width],
+                            initializer=tf.truncated_normal_initializer(stddev=stddev))
+        w2 = tf.get_variable("w2", [3, 3, 3, width, width],
+                            initializer=tf.truncated_normal_initializer(stddev=stddev))
+        wout = tf.get_variable("wout", [3, 3, 3, width, n_out],
+                            initializer=tf.truncated_normal_initializer(stddev=stddev))
+
+        h = tf.nn.relu(tf.nn.conv3d(h, w1, strides=[1, 1, 1, 1, 1], padding='SAME'))
+        h = tf.nn.relu(tf.nn.conv3d(h, w2, strides=[1, 1, 1, 1, 1], padding='SAME'))
+        h = tf.nn.conv3d(h, wout, strides=[1, 1, 1, 1, 1], padding='SAME')
+    return h
