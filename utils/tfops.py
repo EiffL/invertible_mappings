@@ -272,7 +272,7 @@ def invertible_1x1_conv(name, z, reverse=False):
             else:
 
                 w_inv = tf.reshape(w_inv, [1, 1, 1]+w_shape)
-                z = tf.nn.conv2d(
+                z = tf.nn.conv3d(
                     z, w_inv, [1, 1, 1, 1, 1], 'SAME', data_format='NDHWC')
                 logdet = -tf.reduce_sum(log_s) * (shape[1]*shape[2]*shape[3])
 
