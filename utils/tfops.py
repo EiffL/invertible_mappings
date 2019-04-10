@@ -279,6 +279,7 @@ def invertible_1x1_conv(name, z, reverse=False):
 
                 return z, logdet
 
+
 @add_arg_scope
 def get_variable_ddi(name, shape, initial_value, dtype=tf.float32, init=False, trainable=True):
     w = tf.get_variable(name, shape, dtype, None, trainable=trainable)
@@ -440,3 +441,30 @@ class Squeeze3d(tfb.Reshape):
         x = tf.reshape(x, (-1, height*factor,
                            width*factor, height*factor, int(n_channels/factor**3)))
         return x
+
+
+
+
+
+
+def f_net3d(name, h, width, n_out=None):
+
+    k_h, k_w, k_z = [3]*3
+    fan_in = k_h * k_w * k_z * h.get_shape().as_list()[-1]
+    stddev = tf.sqrt(2. / (fan_in))
+    n_out = n_out or int(h.get_shape()[4])
+
+    with tf.variable_scope(name, reuse=tf.AUTO_REUSE):
+#         if scope_has_variables(scope):
+#             scope.reuse_variables()        
+        w1 = tf.get_variable("w1", [3, 3, 3, h.get_shape()[-1], width],
+                            initializer=tf.truncated_normal_initializer(stddev=stddev))
+        w2 = tf.get_variable("w2", [3, 3, 3, width, width],
+                            initializer=tf.truncated_normal_initializer(stddev=stddev))
+        wout = tf.get_variable("wout", [3, 3, 3, width, n_out],
+                            initializer=tf.truncated_normal_initializer(stddev=stddev))
+        
+        h = tf.nn.relu(tf.nn.conv3d(h, w1, strides=[1, 1, 1, 1, 1], padding='SAME'))
+        h = tf.nn.relu(tf.nn.conv3d(h, w2, strides=[1, 1, 1, 1, 1], padding='SAME'))
+        h = tf.nn.conv3d(h, wout, strides=[1, 1, 1, 1, 1], padding='SAME')
+    return h
