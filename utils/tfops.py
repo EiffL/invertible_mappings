@@ -289,7 +289,7 @@ def get_variable_ddi(name, shape, initial_value, dtype=tf.float32, init=False, t
     return w
 
 @add_arg_scope
-def actnorm3d(x, scale=1., logdet=None, logscale_factor=3., batch_variance=False,
+def actnorm3d(x, scale=1., logscale_factor=3., batch_variance=False,
             reverse=False, init=False, is_training=True, scope='actnorm'):
     """
     Borrowed from https://github.com/openai/glow/blob/master/tfops.py
@@ -298,24 +298,19 @@ def actnorm3d(x, scale=1., logdet=None, logscale_factor=3., batch_variance=False
     if arg_scope([get_variable_ddi], trainable=is_training):
         if not reverse:
             x = actnorm_center3d(name+"_center", x, reverse)
-            x = actnorm_scale3d(name+"_scale", x, scale, logdet,
+            x, logdet = actnorm_scale3d(name+"_scale", x, scale,
                               logscale_factor, batch_variance, reverse, init)
-            if logdet != None:
-                x, logdet = x
         else:
-            x = actnorm_scale3d(name + "_scale", x, scale, logdet,
+            x, logdet = actnorm_scale3d(name + "_scale", x, scale,
                               logscale_factor, batch_variance, reverse, init)
-            if logdet != None:
-                x, logdet = x
+
             x = actnorm_center3d(name+"_center", x, reverse)
-        if logdet != None:
-            return x, logdet
-        return x
+        return x, logdet
 
 @add_arg_scope
 def actnorm_center3d(name, x, reverse=False):
     shape = x.get_shape()
-    with tf.variable_scope(name):
+    with tf.variable_scope(name, reuse=tf.AUTO_REUSE):
         assert len(shape) == 5
         x_mean = tf.reduce_mean(x, [0, 1, 2, 3], keepdims=True)
         b = get_variable_ddi(
@@ -331,14 +326,14 @@ def actnorm_center3d(name, x, reverse=False):
 
 
 @add_arg_scope
-def actnorm_scale3d(name, x, scale=1., logdet=None, logscale_factor=3.,
+def actnorm_scale3d(name, x, scale=1., logscale_factor=3.,
                   batch_variance=False, reverse=False, init=False, trainable=True):
     shape = x.get_shape()
-    with tf.variable_scope(name), arg_scope([get_variable_ddi], trainable=trainable):
+    with tf.variable_scope(name, reuse=tf.AUTO_REUSE), arg_scope([get_variable_ddi], trainable=trainable):
         assert len(shape) == 5
         x_var = tf.reduce_mean(x**2, [0, 1, 2, 3], keepdims=True)
 #         logdet_factor = int(shape[1])*int(shape[2])*int(shape[3])
-        logdet_factor = (shape[1])*(shape[2])*(shape[3])
+        logdet_factor = int(shape[1])*int(shape[2])*int(shape[3])
 #         _shape = (1, 1, 1, 1, int_shape(x)[4])
         _shape = (1, 1, 1, 1, shape[4])
 
@@ -362,81 +357,7 @@ def actnorm_scale3d(name, x, scale=1., logdet=None, logscale_factor=3.,
             else:
                 x /= s
 
-        if logdet != None:
-            dlogdet = tf.reduce_sum(logs) * logdet_factor
-            if reverse:
-                dlogdet *= -1
-            return x, logdet + dlogdet
-
-        return x
-
-
-#Squeeze operation for invertible downsampling in 3D
-#
-#
-class Squeeze3d(tfb.Reshape):
-    """
-    Borrowed from https://github.com/openai/glow/blob/master/tfops.py
-    """
-    def __init__(self,
-                 event_shape_in,
-                 factor=2,
-                 is_constant_jacobian=True,
-                 validate_args=False,
-                 name=None):
-
-        assert factor >= 1
-        name = name or "squeeze"
-        self.factor = factor
-        event_shape_out = 1*event_shape_in
-        event_shape_out[0] //=2
-        event_shape_out[1] //=2
-        event_shape_out[2] //=2
-        event_shape_out[3] *=8
-        self.event_shape_out = event_shape_out
-
-        super(Squeeze3d, self).__init__(
-            event_shape_out=event_shape_out,
-            event_shape_in=event_shape_in,
-        validate_args=validate_args,
-        name=name)
-
-    def _forward(self, x):
-        if self.factor == 1:
-            return x
-        factor = self.factor
-
-        shape = tf.shape(x)
-        height = shape[1]
-        width = shape[2]
-        length = shape[3]
-        n_channels = x.get_shape()[4]
-
-#         print(height, width, length, n_channels )
-#         assert height % factor == 0 and width % factor == 0 and length % factor == 0
-        x = tf.reshape(x, [-1, height//factor, factor,
-                           width//factor, factor, length//factor, factor, n_channels])
-        x = tf.transpose(x, [0, 1, 3, 5, 7, 2, 4, 6])
-        x = tf.reshape(x, [-1, height//factor, width//factor,
-                               length//factor, n_channels*factor**3])
-        return x
-
-    def _inverse(self, x):
-        if self.factor == 1:
-            return x
-        factor = self.factor
-
-        shape = tf.shape(x)
-        height = shape[1]
-        width = shape[2]
-        length = shape[3]
-        n_channels = int(x.get_shape()[4])
-
-#         print(height, width, length, n_channels )
-        assert n_channels >= 8 and n_channels % 8 == 0
-        x = tf.reshape(
-            x, [-1, height, width, length, int(n_channels/factor**3), factor, factor, factor])
-        x = tf.transpose(x, [0, 1, 5, 2, 6, 3, 7, 4])
-        x = tf.reshape(x, (-1, height*factor,
-                           width*factor, height*factor, int(n_channels/factor**3)))
-        return x
+        dlogdet = tf.reduce_sum(logs) * logdet_factor
+        if reverse:
+            dlogdet *= -1
+        return x, dlogdet
