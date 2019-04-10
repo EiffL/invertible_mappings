@@ -17,7 +17,7 @@ class Conv1x1_3D(tfb.Bijector):
         self._validate_args = validate_args
 
         super(self.__class__, self).__init__(
-          forward_min_event_ndims=0,
+          forward_min_event_ndims=4,
           is_constant_jacobian=False,
           validate_args=validate_args,
           dtype=dtype,
@@ -47,7 +47,7 @@ class Actnorm3D(tfb.Bijector):
         self._logscale_factor = logscale_factor
         self._scale = scale
         super(self.__class__, self).__init__(
-          forward_min_event_ndims=0,
+          forward_min_event_ndims=4,
           is_constant_jacobian=False,
           validate_args=validate_args,
           dtype=dtype,
@@ -143,11 +143,10 @@ class AffineGlow3d(tfb.Bijector):
     def __init__(self, width=16,
                name="affine"):
 
-#         self.name = name
         self.width = width
         super(AffineGlow3d, self).__init__(
             is_constant_jacobian=False,
-            forward_min_event_ndims=0,
+            forward_min_event_ndims=4,
             dtype=None,
             validate_args=False,
             name=name)

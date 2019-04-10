@@ -195,7 +195,6 @@ def invertible_1x1_conv(name, z, reverse=False):
             # dlogdet = tf.linalg.LinearOperator(w).log_abs_determinant() * shape[1]*shape[2]
             logdet = tf.cast(tf.log(abs(tf.matrix_determinant(
                 tf.cast(w, 'float64')))), 'float32') * shape[1]*shape[2]*shape[3]
-
             if not reverse:
 
                 _w = tf.reshape(w, [1, 1, 1] + w_shape)
