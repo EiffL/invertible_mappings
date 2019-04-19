@@ -29,8 +29,9 @@ def wide_resnet(inputs, depth, resample=None,
                                 kernel_size=3,
                                 stride=1):
 
-                preact = slim.batch_norm(
-                    inputs, activation_fn=activation_fn, scope='preact')
+                #preact = slim.batch_norm(
+                #    inputs, activation_fn=activation_fn, scope='preact')
+                preact = tf.nn.leaky_relu(inputs)
 
                 if resample == 'up':
                     output_size = size_in * 2
@@ -71,7 +72,8 @@ def wide_resnet(inputs, depth, resample=None,
 def wide_resnet_snorm(inputs, depth, 
                 kernel_size=3, stride=1,
                 keep_prob=None,
-                activation_fn=tf.nn.leaky_relu,
+                #activation_fn=tf.nn.leaky_relu,
+                activation_fn=tf.nn.relu,
                 is_training=True,
                 outputs_collections=None, scope=None):
     """
@@ -86,13 +88,16 @@ def wide_resnet_snorm(inputs, depth,
     size_in = inputs.get_shape().as_list()[1]
 
     with tf.variable_scope(scope, 'wide_resnet', [inputs]) as sc:
-        with slim.arg_scope([tfops.actnorm3d, slim.dropout],
+        with slim.arg_scope([tfops.actnorm3d, slim.dropout, slim.batch_norm],
                             is_training=is_training):
             with slim.arg_scope([tfops.specnormconv3d],
                                 kernel_size=kernel_size,
                                 stride=stride):
 
-                preact = tfops.actnorm3d(inputs, scope='preact')
+                #preact = tfops.actnorm3d(inputs, scope='preact')
+                #preact = slim.batch_norm(
+                #    inputs, activation_fn=activation_fn, scope='preact')
+                preact = tf.nn.leaky_relu(inputs)
                 if activation_fn is not None: preact = activation_fn(preact)
                 
                 if depth_in != depth:

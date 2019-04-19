@@ -196,17 +196,21 @@ def guassdiff(pm, R1, R2):
 #################################################################################
 
 
-def power(f1, f2=None, boxsize=1.0, k = None):
+
+
+def power(f1, f2=None, boxsize=1.0, k = None, symmetric=True):
     """
     Calculate power spectrum given density field in real space & boxsize.
     Divide by mean, so mean should be non-zero
     """
 #    f1 = f1[::2, ::2, ::2]
-    c1 = numpy.fft.rfftn(f1)
+    if symmetric: c1 = numpy.fft.rfftn(f1)
+    else: c1 = numpy.fft.fftn(f1)
     c1 /= c1[0, 0, 0].real
     c1[0, 0, 0] = 0
     if f2 is not None:
-        c2 = numpy.fft.rfftn(f2)
+        if symmetric: c2 = numpy.fft.rfftn(f2)
+        else: c2 = numpy.fft.fftn(f2)
         c2 /= c2[0, 0, 0].real
         c2[0, 0, 0] = 0
     else:
@@ -216,7 +220,7 @@ def power(f1, f2=None, boxsize=1.0, k = None):
     del c1
     del c2
     if k is None:
-        k = fftk(f1.shape, boxsize)
+        k = fftk(f1.shape, boxsize, symmetric=symmetric)
         k = sum(kk**2 for kk in k)**0.5
     H, edges = numpy.histogram(k.flat, weights=x.flat, bins=f1.shape[0]) 
     N, edges = numpy.histogram(k.flat, bins=edges)
