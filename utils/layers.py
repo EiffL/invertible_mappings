@@ -75,7 +75,7 @@ def wide_resnet_snorm(inputs, depth,
                 #activation_fn=tf.nn.leaky_relu,
                 activation_fn=tf.nn.relu,
                 is_training=True,
-                outputs_collections=None, scope=None):
+                      outputs_collections=None, scope=None, normwt=0.7, resonly=False):
     """
     Wide residual units as advocated in arXiv:1605.07146
     Adapted from slim implementation of residual networks
@@ -101,17 +101,17 @@ def wide_resnet_snorm(inputs, depth,
                 if activation_fn is not None: preact = activation_fn(preact)
                 
                 if depth_in != depth:
-                    shortcut = tfops.specnormconv3d(preact, depth, name='shortcut')
+                    shortcut = tfops.specnormconv3d(preact, depth, name='shortcut', normwt=normwt)
                 else:
                     shortcut = preact
 
-                residual = tfops.specnormconv3d(preact, depth_residual, name='res1')
+                residual = tfops.specnormconv3d(preact, depth_residual, name='res1', normwt=normwt)
                 #residual = specnormconv3d(preact, depth_residual, scope='res1')
 
                 if keep_prob is not None:
                     residual = slim.dropout(residual, keep_prob=keep_prob)
 
-                residual = tfops.specnormconv3d(residual, depth, name='res2')
+                residual = tfops.specnormconv3d(residual, depth, name='res2', normwt=normwt)
 #                 residual = specnormconv3d(residual, depth, stride=1, scope='res2',
 #                                        normalizer_fn=None, activation_fn=None)
 

@@ -12,7 +12,7 @@ NO_OPS = 'NO_OPS'
 def _l2normalize(v, eps=1e-12):
     return v / (tf.reduce_sum(v ** 2) ** 0.5 + eps)
 
-def spectral_normed_weight(W, u=None, num_iters=1, update_collection=None, with_sigma=False):
+def spectral_normed_weight(W, u=None, num_iters=1, update_collection=None, with_sigma=False, normwt=0.7):
   # Usually num_iters = 1 will be enough
     W_shape = W.shape.as_list()
     W_reshaped = tf.reshape(W, [-1, W_shape[-1]])
@@ -37,7 +37,9 @@ def spectral_normed_weight(W, u=None, num_iters=1, update_collection=None, with_
                   '. Please consider using a update collection instead.')
         sigma = tf.matmul(tf.matmul(v_final, W_reshaped), tf.transpose(u_final))[0, 0]
         # sigma = tf.reduce_sum(tf.matmul(u_final, tf.transpose(W_reshaped)) * v_final)
-        W_bar = W_reshaped / sigma
+        scaling = tf.minimum(1., normwt/sigma)
+        #scaling = normwt/sigma
+        W_bar = W_reshaped *scaling
         with tf.control_dependencies([u.assign(u_final)]):
             W_bar = tf.reshape(W_bar, W_shape)
     else:
@@ -63,7 +65,7 @@ def scope_has_variables(scope):
 def specnormconv3d(input_, output_dim,
            kernel_size=3, stride=1, stddev=None,
            name="conv3d", spectral_normed=True, update_collection=None, with_w=False,
-                   padding="SAME", reuse=tf.AUTO_REUSE, num_iters=1):
+                   padding="SAME", reuse=tf.AUTO_REUSE, num_iters=1, normwt=0.7):
 
     k_h, k_w, k_z = [kernel_size]*3
     d_h, d_w, d_z = [stride]*3
@@ -80,7 +82,7 @@ def specnormconv3d(input_, output_dim,
         w = tf.get_variable("w", [k_h, k_w, k_z, input_.get_shape()[-1], output_dim],
                             initializer=tf.truncated_normal_initializer(stddev=stddev))
         if spectral_normed:
-            conv = tf.nn.conv3d(input_, spectral_normed_weight(w, update_collection=update_collection, num_iters=num_iters),
+            conv = tf.nn.conv3d(input_, spectral_normed_weight(w, update_collection=update_collection, num_iters=num_iters, normwt=normwt),
                               strides=[1, d_h, d_w, d_z, 1], padding=padding)
         else:
             conv = tf.nn.conv3d(input_, w, strides=[1, d_h, d_w, d_z, 1], padding=padding)
@@ -98,7 +100,7 @@ def specnormconv3d(input_, output_dim,
 def specnormconv2d(input_, output_dim,
            kernel_size=3, stride=1, stddev=None,
            name="conv2d", spectral_normed=True, update_collection=None, with_w=False,
-                   padding="SAME", reuse=tf.AUTO_REUSE, num_iters=1):
+                   padding="SAME", reuse=tf.AUTO_REUSE, num_iters=1, normwt=0.7):
 
     k_h, k_w = [kernel_size]*2
     d_h, d_w = [stride]*2
@@ -116,7 +118,7 @@ def specnormconv2d(input_, output_dim,
                             initializer=tf.truncated_normal_initializer(stddev=stddev))
         if spectral_normed:
             conv = tf.nn.conv2d(input_, spectral_normed_weight(w, update_collection=update_collection,
-                                                               num_iters=num_iters),
+                                                               num_iters=num_iters, normwt=normwt),
                               strides=[1, d_h, d_w, 1], padding=padding)
         else:
             conv = tf.nn.conv2d(input_, w, strides=[1, d_h, d_w, 1], padding=padding)
